@@ -23,6 +23,21 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173", "*"]
 
+    @validator("ALLOWED_ORIGINS", pre=True)
+    def parse_allowed_origins(cls, v):
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "*":
+                return ["*"]
+            try:
+                import json
+                return json.loads(v)
+            except Exception:
+                return [v]
+        return v
+
     # S3 / Object Storage
     S3_BUCKET_NAME: str = "streamsafe-recordings"
     S3_REGION: str = "us-east-1"
