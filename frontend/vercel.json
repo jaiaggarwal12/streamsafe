@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "env": {
+    "VITE_API_URL": "@streamsafe_api_url",
+    "VITE_WS_URL": "@streamsafe_ws_url"
+  }
+}
