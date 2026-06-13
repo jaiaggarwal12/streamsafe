@@ -6,11 +6,16 @@ Layer 3: Reactive feedback loop
 """
 import os
 import pickle
-import numpy as np
 from typing import Optional
 from dataclasses import dataclass, field
 from collections import deque
 import structlog
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 
 logger = structlog.get_logger()
 
@@ -80,48 +85,29 @@ class MLABRModel:
                 logger.warning("abr_model_load_failed", error=str(e))
                 self.model = None
 
-    def _features(
-        self,
-        stats: NetworkSample,
-        content_type: str = "face",
-        device_type: str = "desktop",
-        browser: str = "chrome",
-        network_type: str = "wifi",
-        call_duration_s: float = 0.0,
-    ) -> np.ndarray:
+    def _features(self, stats, content_type, device_type, browser, network_type, call_duration_s):
+        if not NUMPY_AVAILABLE:
+            return None
         content_map = {"face": 0, "document": 1, "screenshare": 2}
         device_map = {"desktop": 0, "mobile": 1, "tablet": 2}
         browser_map = {"chrome": 0, "firefox": 1, "safari": 2, "edge": 3}
         network_map = {"wifi": 0, "4g": 1, "3g": 2, "ethernet": 3}
-
         return np.array([[
-            stats.bandwidth_kbps,
-            stats.packet_loss_ratio,
-            stats.rtt_ms,
-            stats.jitter_ms,
-            content_map.get(content_type, 0),
-            device_map.get(device_type, 0),
-            browser_map.get(browser, 0),
-            network_map.get(network_type, 0),
-            call_duration_s,
-            min(call_duration_s / 60.0, 60.0),  # capped minutes
+            stats.bandwidth_kbps, stats.packet_loss_ratio, stats.rtt_ms, stats.jitter_ms,
+            content_map.get(content_type, 0), device_map.get(device_type, 0),
+            browser_map.get(browser, 0), network_map.get(network_type, 0),
+            call_duration_s, min(call_duration_s / 60.0, 60.0),
         ]])
 
-    def predict(
-        self,
-        stats: NetworkSample,
-        content_type: str = "face",
-        device_type: str = "desktop",
-        browser: str = "chrome",
-        network_type: str = "wifi",
-        call_duration_s: float = 0.0,
-    ) -> Optional[int]:
-        if self.model is None:
+    def predict(self, stats, content_type="face", device_type="desktop",
+                browser="chrome", network_type="wifi", call_duration_s=0.0):
+        if self.model is None or not NUMPY_AVAILABLE:
             return None
         try:
             X = self._features(stats, content_type, device_type, browser, network_type, call_duration_s)
+            if X is None:
+                return None
             pred = self.model.predict(X)[0]
-            # Output is bitrate class: 0=low, 1=mid, 2=high, 3=max
             tier_map = {0: BITRATE_LOW, 1: BITRATE_MID, 2: BITRATE_HIGH, 3: BITRATE_MAX}
             return tier_map.get(int(pred), BITRATE_MID)
         except Exception as e:
