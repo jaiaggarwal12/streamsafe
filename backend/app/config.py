@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic import Field
 from functools import lru_cache
-import os
+import os, json
 
 
 class Settings(BaseSettings):
@@ -21,24 +21,29 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # CORS
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173", "*"]
+    # CORS — stored as str with alias, parsed to list via property
+    ALLOWED_ORIGINS_RAW: str = Field(
+        default='["http://localhost:3000","http://localhost:5173","*"]',
+        alias="ALLOWED_ORIGINS"
+    )
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        if isinstance(v, list):
-            return v
-        if isinstance(v, str):
-            v = v.strip()
-            if v == "*":
-                return ["*"]
-            try:
-                import json
-                return json.loads(v)
-            except Exception:
-                return [v]
-        return v
+    @property
+    def ALLOWED_ORIGINS(self) -> list[str]:
+        v = self.ALLOWED_ORIGINS_RAW.strip()
+        if v == "*":
+            return ["*"]
+        try:
+            result = json.loads(v)
+            if isinstance(result, list):
+                return result
+            return [str(result)]
+        except Exception:
+            return [v]
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+        populate_by_name = True
 
     # S3 / Object Storage
     S3_BUCKET_NAME: str = "streamsafe-recordings"
